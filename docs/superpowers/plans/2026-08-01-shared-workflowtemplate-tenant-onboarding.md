@@ -203,9 +203,15 @@ Expected output: `yes` — flipped from `no` in Task 1 Step 1.
 
 ```bash
 kubectl auth can-i patch workflowtaskresults.argoproj.io -n tenant-ns --as=system:serviceaccount:tenant-ns:default
-kubectl auth can-i patch workflowtasksets.argoproj.io/status -n tenant-ns --as=system:serviceaccount:tenant-ns:default
+kubectl auth can-i patch workflowtasksets.argoproj.io --subresource=status -n tenant-ns --as=system:serviceaccount:tenant-ns:default
 ```
 Expected output: `yes` for both.
+
+Subresources must be checked with `--subresource=status`. Do **not** write
+`workflowtasksets.argoproj.io/status` — kubectl parses the part after the slash
+as a resource *name*, so that form silently asks whether you may patch an object
+literally named `status` and returns a misleading `no` even when the ClusterRole
+is correct.
 
 - [ ] **Step 4: Assert the grant did NOT leak into another namespace**
 
