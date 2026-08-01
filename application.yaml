@@ -6,8 +6,8 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: file:///Users/charlesjoseph/Work/tenant_namespace
-    targetRevision: HEAD
+    repoURL: https://github.com/charlesjosephgit/tenant-ns.git
+    targetRevision: main
     path: manifests
   destination:
     server: https://kubernetes.default.svc
