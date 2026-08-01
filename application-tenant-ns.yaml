@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tenant-ns-config-sample
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/charlesjosephgit/tenant-ns.git
+    targetRevision: main
+    path: manifests-tenant-ns
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: tenant-ns
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
