@@ -1,8 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
-kind: WorkflowTemplate
+kind: ClusterWorkflowTemplate
 metadata:
   name: temp-service-template
-  namespace: parent-ns
 spec:
   entrypoint: run-temp-service
   templates:
