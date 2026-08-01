@@ -11,7 +11,7 @@ spec:
     path: manifests
   destination:
     server: https://kubernetes.default.svc
-    namespace: tenant-ns
+    namespace: parent-ns
   syncPolicy:
     automated:
       prune: true

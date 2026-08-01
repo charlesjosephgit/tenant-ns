@@ -2,7 +2,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
   name: temp-service-template
-  namespace: tenant-ns
+  namespace: parent-ns
 spec:
   entrypoint: run-temp-service
   templates:
