@@ -7,23 +7,9 @@ spec:
   entrypoint: run-temp-service
   templates:
     - name: run-temp-service
-      container:
-        image: python:3.11-alpine
-        command: ["sh", "-c"]
-        args:
-          - |
-            echo "GREETING=$GREETING"
-            echo "APP_ENV=$APP_ENV"
-            echo "API_KEY=$API_KEY"
-            echo "Starting temp service on port $SERVICE_PORT for 5 minutes..."
-            python3 -m http.server "$SERVICE_PORT" &
-            SERVER_PID=$!
-            sleep 300
-            kill $SERVER_PID
-        envFrom:
-          - configMapRef:
-              name: sample-config
-          - secretRef:
-              name: sample-secret
-        ports:
-          - containerPort: 8080
+      steps:
+        - - name: run-temp-service
+            templateRef:
+              name: temp-service-template
+              template: run-temp-service
+              clusterScope: true
