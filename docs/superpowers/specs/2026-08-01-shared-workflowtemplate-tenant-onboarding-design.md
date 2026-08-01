@@ -35,7 +35,7 @@ from any namespace. No copy is needed to share it.
 | `manifests/configmap.yaml`, `manifests/secret.yaml` | Pinned to `namespace: tenant-ns` | Tenant-scoped objects living in the cluster-scoped Application; sync into `tenant-ns` despite the Application targeting `parent-ns` |
 | `application-tenant-ns.yaml` | Application → `manifests-tenant-ns`, destination `tenant-ns` | One such file required per tenant |
 | `manifests-tenant-ns/workflowtemplate.yaml` | `WorkflowTemplate/local-wf-template` | Pure forwarding shim; adds no capability |
-| — | Executor RBAC | Added in `f169b0d`, deleted in `3b05892`, never restored. Workflows in `tenant-ns` fail unless it exists outside this repo. |
+| — | Executor RBAC | Added in `f169b0d`, deleted in `3b05892`, never restored. **Confirmed broken on the cluster:** `kubectl get role,rolebinding -n tenant-ns` returns nothing, and `kubectl auth can-i create workflowtaskresults.argoproj.io -n tenant-ns --as=system:serviceaccount:tenant-ns:default` returns `no`. Workflows in `tenant-ns` fail today. |
 
 ## Design
 
@@ -119,14 +119,16 @@ Application automatically; no ArgoCD object is edited.
 
 ### Onboarding a tenant, after this change
 
-Copy a tenant folder, set the config/secret values, and set the namespace in
-`rolebinding.yaml`. Three small files, one commit, no ArgoCD object touched, no
-template duplication.
+Copy a tenant folder, rename it to the new namespace, set the config/secret
+values. Three small files, one commit, no ArgoCD object touched, no template
+duplication.
 
-The RoleBinding is the one file that must name its namespace: the RBAC API
-requires `subjects[].namespace` for a `ServiceAccount` subject. Confirm this at
-implementation time by applying a binding without it; if the API accepts it, drop
-the field and the folder becomes fully copy-paste-able.
+No file in the folder names its namespace. A RoleBinding whose `ServiceAccount`
+subject omits `namespace` resolves against the binding's own namespace —
+verified on the target cluster: with such a binding applied,
+`kubectl auth can-i create workflowtaskresults.argoproj.io -n tenant-ns
+--as=system:serviceaccount:tenant-ns:default` returns `yes`. The folder is
+therefore copy-paste-able with no edits beyond the config values themselves.
 
 ## Verification
 
