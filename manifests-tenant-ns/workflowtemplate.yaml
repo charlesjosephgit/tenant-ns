@@ -4,6 +4,12 @@ metadata:
   name: local-wf-template
   namespace: tenant-ns
 spec:
-  workflowTemplateRef:
-    name: temp-service-template
-    clusterScope: true
+  entrypoint: run-temp-service
+  templates:
+    - name: run-temp-service
+      steps:
+        - - name: run-temp-service
+            templateRef:
+              name: temp-service-template
+              template: run-temp-service
+              clusterScope: true
