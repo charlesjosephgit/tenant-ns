@@ -1,0 +1,9 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: local-wf-template
+  namespace: tenant-ns
+spec:
+  workflowTemplateRef:
+    name: temp-service-template
+    clusterScope: true
