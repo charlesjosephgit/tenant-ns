@@ -1,0 +1,22 @@
+# Shared data owned by parent-ns and read cross-namespace by tenants.
+# Access is granted by parent-ns-read-rolebinding.yaml.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: parent-shared-config
+  namespace: parent-ns
+data:
+  region: eu-west-1
+  tier: shared
+---
+# WARNING: placeholder value, committed in plaintext. Anyone with repo access
+# can read it. Before this holds a real credential, source it from the
+# ClusterSecretStore (as tenant-workflow-credentials does) instead of literals.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: parent-shared-secret
+  namespace: parent-ns
+type: Opaque
+stringData:
+  api-key: parent-placeholder-key

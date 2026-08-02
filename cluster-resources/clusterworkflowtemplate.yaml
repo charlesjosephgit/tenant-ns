@@ -4,12 +4,34 @@ metadata:
   name: tenant-shared-ops
 spec:
   entrypoint: main
+  # Bound to parent-ns by parent-ns-read-rolebinding.yaml, which is what makes
+  # the cross-namespace reads below succeed.
+  serviceAccountName: default
   arguments:
     parameters:
       - name: message
         value: "hello from the shared cluster template"
   templates:
     - name: main
+      inputs:
+        parameters:
+          - name: message
+      dag:
+        tasks:
+          - name: local-secret
+            template: show-local-secret
+            arguments:
+              parameters:
+                - name: message
+                  value: "{{inputs.parameters.message}}"
+          - name: parent-configmap
+            template: read-parent-configmap
+          - name: parent-secret
+            template: read-parent-secret
+
+    # Same-namespace access: the Secret that the ClusterExternalSecret
+    # materialises into this tenant namespace can be mounted as env vars.
+    - name: show-local-secret
       inputs:
         parameters:
           - name: message
@@ -23,8 +45,6 @@ spec:
             # Length only — never echo the token itself into workflow logs.
             echo "token:    ${#API_TOKEN} chars"
         env:
-          # Resolved from the Secret that the ClusterExternalSecret
-          # materializes in whichever tenant namespace the Workflow runs in.
           - name: API_ENDPOINT
             valueFrom:
               secretKeyRef:
@@ -35,3 +55,36 @@ spec:
               secretKeyRef:
                 name: tenant-workflow-credentials
                 key: api-token
+
+    # Cross-namespace access: parent-ns objects CANNOT be mounted from a
+    # tenant-ns pod, so they must be fetched through the Kubernetes API.
+    #
+    # Two constraints shape these steps:
+    #   1. rancher/kubectl is distroless — no shell, so `command: [sh, -c]`
+    #      fails. kubectl is the entrypoint; pass bare args.
+    #   2. Use jsonpath, NOT go-template. Argo substitutes `{{...}}` itself
+    #      and would fail to resolve go-template braces as workflow variables.
+    - name: read-parent-configmap
+      container:
+        image: rancher/kubectl:v1.31.0
+        args:
+          - get
+          - configmap
+          - parent-shared-config
+          - --namespace=parent-ns
+          - -o
+          - jsonpath={.data.region}{"\n"}
+
+    - name: read-parent-secret
+      container:
+        image: rancher/kubectl:v1.31.0
+        # `-o name` deliberately: a successful GET proves the RBAC grant
+        # without spilling secret material into workflow logs, which are
+        # readable by anyone with Argo UI access.
+        args:
+          - get
+          - secret
+          - parent-shared-secret
+          - --namespace=parent-ns
+          - -o
+          - name
