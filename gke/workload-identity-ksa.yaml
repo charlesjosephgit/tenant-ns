@@ -1,0 +1,37 @@
+# GKE Workload Identity: one KubernetesServiceAccount (KSA) per tenant
+# namespace, every one impersonating the SAME Google ServiceAccount (GSA).
+#
+# THIS FILE IS HALF THE BINDING. The annotation below is inert on its own —
+# it only takes effect once the GSA also carries an IAM policy binding naming
+# this exact namespace/KSA pair:
+#
+#   roles/iam.workloadIdentityUser
+#   member: serviceAccount:PROJECT_ID.svc.id.goog[NAMESPACE/KSA_NAME]
+#
+# scripts/bind-workload-identity.sh does both halves. Applying this file alone
+# yields pods that fail at token-exchange time, not at startup, which is a
+# confusing failure to debug.
+#
+# Not under cluster-resources/: the current cluster is docker-desktop, where
+# Workload Identity does not exist. Substitute GSA_EMAIL before applying, or
+# let the script do it.
+#
+# NOTE ON SHARING ONE GSA: every namespace below gets identical Google Cloud
+# permissions. A workload in any one of them can do anything the GSA can, so
+# this trades cloud-side tenant isolation for operational simplicity. See the
+# script header for the per-tenant alternative.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: workload-runner
+  namespace: parent-ns
+  annotations:
+    iam.gke.io/gcp-service-account: GSA_EMAIL
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: workload-runner
+  namespace: tenant-ns
+  annotations:
+    iam.gke.io/gcp-service-account: GSA_EMAIL
