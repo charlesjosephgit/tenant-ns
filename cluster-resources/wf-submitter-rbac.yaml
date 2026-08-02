@@ -46,10 +46,17 @@ rules:
   - apiGroups: ["argoproj.io"]
     resources: ["workflows"]
     verbs: ["create", "get", "list", "watch"]
-  # The argo-server log endpoint reads pod logs on the caller's behalf, so the
-  # caller needs this to see workflow output. Widens exposure to anything a
-  # tenant workflow prints — which is why tenant-shared-ops never echoes secret
-  # values. Drop this rule if submitters should be write-only.
+  # The argo-server log endpoint streams on the caller's behalf: it watches
+  # pods to follow them, so `pods/log` alone yields
+  # "cannot watch resource pods". Both rules are required.
+  #
+  # Cost of granting these: the caller can read anything a tenant workflow
+  # prints, and can see tenant pod specs — which expose the NAMES of mounted
+  # Secrets and their keys, though not their values. Drop both rules if
+  # submitters should be write-only and blind to output.
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
   - apiGroups: [""]
     resources: ["pods/log"]
     verbs: ["get"]
