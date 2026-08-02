@@ -15,7 +15,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/charlesjosephgit/negative-ns.git
+    repoURL: https://github.com/charlesjosephgit/tenant-ns.git
     targetRevision: main
     path: manifests/negative-ns
   destination:
