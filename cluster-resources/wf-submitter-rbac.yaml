@@ -1,0 +1,63 @@
+# Identity used by parent-ns workloads to submit workflows into tenant
+# namespaces through the argo-server API.
+#
+# With argo-server running in `--auth-mode=client`, the caller's own
+# ServiceAccount token is what authorises the request: argo-server builds a
+# Kubernetes client from that token, so every permission below must be held
+# by this SA, not by argo-server.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: wf-submitter
+  namespace: parent-ns
+---
+# ClusterWorkflowTemplates are cluster-scoped, so reading the template being
+# submitted needs a ClusterRole rather than a namespaced Role.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: argo-clusterworkflowtemplate-reader
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["clusterworkflowtemplates"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: wf-submitter-reads-clusterworkflowtemplates
+subjects:
+  - kind: ServiceAccount
+    name: wf-submitter
+    namespace: parent-ns
+roleRef:
+  kind: ClusterRole
+  name: argo-clusterworkflowtemplate-reader
+  apiGroup: rbac.authorization.k8s.io
+---
+# Permission to actually run workflows lands in tenant-ns. Scoped to submit
+# and observe — deliberately no delete, and no access to tenant Secrets.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: argo-workflow-submitter
+  namespace: tenant-ns
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["workflows"]
+    verbs: ["create", "get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: parent-ns-submits-to-tenant-ns
+  namespace: tenant-ns
+subjects:
+  # Subject lives in parent-ns; the permissions apply in tenant-ns.
+  - kind: ServiceAccount
+    name: wf-submitter
+    namespace: parent-ns
+roleRef:
+  kind: Role
+  name: argo-workflow-submitter
+  apiGroup: rbac.authorization.k8s.io
