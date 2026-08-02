@@ -15,7 +15,7 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: submit-from-parent-ns-5
+  name: submit-from-parent-ns-6
   namespace: parent-ns
 spec:
   serviceAccountName: wf-submitter
