@@ -1,26 +1,26 @@
-# Tenant-ns app: everything scoped to the tenant namespace.
+# negative-ns app: everything scoped to the tenant namespace.
 #
 # Holds no cluster-scoped objects by design. Deleting or breaking this app
-# affects tenant-ns only — it cannot take down shared infrastructure, which
+# affects negative-ns only — it cannot take down shared infrastructure, which
 # is the point of splitting the two.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: tenant-ns-resources
+  name: negative-ns-resources
   # Lives in parent-ns, the management namespace, alongside the parent app.
-  # Putting it in tenant-ns instead would mean adding tenant-ns to
+  # Putting it in negative-ns instead would mean adding negative-ns to
   # `application.namespaces` and giving argocd-server RBAC there — and would
   # hand tenants edit access to their own Application.
-  namespace: tenant-ns
+  namespace: negative-ns
 spec:
   project: default
   source:
-    repoURL: https://github.com/charlesjosephgit/tenant-ns.git
+    repoURL: https://github.com/charlesjosephgit/negative-ns.git
     targetRevision: main
-    path: manifests/tenant-ns
+    path: manifests/negative-ns
   destination:
     server: https://kubernetes.default.svc
-    namespace: tenant-ns
+    namespace: negative-ns
   syncPolicy:
     automated:
       prune: true
