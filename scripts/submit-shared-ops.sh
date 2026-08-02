@@ -60,8 +60,9 @@ kubectl get clusterworkflowtemplate "$TEMPLATE" >/dev/null \
 # The template mounts this Secret as env vars; without it the pod will not start.
 if ! kubectl -n "$NAMESPACE" get secret tenant-workflow-credentials >/dev/null 2>&1; then
   echo "error: Secret/tenant-workflow-credentials missing in '$NAMESPACE'." >&2
-  echo "       The ClusterExternalSecret only targets namespaces labelled tenant=true." >&2
-  echo "       Fix with: kubectl label ns $NAMESPACE tenant=true --overwrite" >&2
+  echo "       The ClusterExternalSecret provisions only the namespaces named in its" >&2
+  echo "       namespaceSelectors allowlist. Add '$NAMESPACE' to the values list in" >&2
+  echo "       cluster-resources/clusterexternalsecret.yaml, commit, and let ArgoCD sync." >&2
   exit 1
 fi
 echo "    ClusterWorkflowTemplate/$TEMPLATE and Secret/tenant-workflow-credentials present"

@@ -10,8 +10,8 @@
 # cannot scope a ClusterRole per namespace. So "only accessible in tenant-ns
 # and parent-ns" is enforced by three independent gates, not by the objects:
 #
-#   Gate 1 (ESO)  ClusterExternalSecret has namespaceSelectors tenant=true, so
-#                 it never provisions the Secret into an unlabelled namespace.
+#   Gate 1 (ESO)  ClusterExternalSecret pins an explicit namespace allowlist by
+#                 name, so it never provisions the Secret anywhere else.
 #   Gate 2 (RBAC) No ServiceAccount outside the tenant namespaces is granted
 #                 create on workflows, so submission is refused.
 #   Gate 3 (deps) Even a cluster-admin submission fails, because the template
@@ -48,11 +48,15 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-echo "==> Setup: ensure $NEG_NS exists and is NOT labelled tenant=true"
+echo "==> Setup: ensure $NEG_NS exists and is absent from the ESO allowlist"
 kubectl create namespace "$NEG_NS" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-kubectl label namespace "$NEG_NS" tenant- --overwrite >/dev/null 2>&1 || true
-LBL="$(kubectl get ns "$NEG_NS" -o jsonpath='{.metadata.labels.tenant}')"
-[[ -z "$LBL" ]] && ok "$NEG_NS carries no tenant label" || bad "$NEG_NS unexpectedly labelled tenant=$LBL"
+# The allowlist is pinned by name, so no labelling is involved. Assert the
+# namespace genuinely is not named in the selector rather than trusting it.
+kubectl get clusterexternalsecret tenant-workflow-credentials -o json \
+  | jq -e --arg ns "$NEG_NS" '
+      [.spec.namespaceSelectors[]?.matchExpressions[]?.values[]?] | index($ns) == null' >/dev/null \
+  && ok "$NEG_NS not named in the namespaceSelectors allowlist" \
+  || bad "$NEG_NS IS named in the allowlist"
 
 echo "==> Gate 1: ClusterExternalSecret must not provision into $NEG_NS"
 PROV="$(kubectl get clusterexternalsecret tenant-workflow-credentials -o jsonpath='{.status.provisionedNamespaces}')"
