@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cluster-resources
+  # Lives outside the ArgoCD control-plane namespace. This requires
+  # `application.namespaces` in argocd-cmd-params-cm and a matching
+  # `sourceNamespaces` entry on the AppProject below.
+  namespace: parent-ns
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/charlesjosephgit/tenant-ns.git
+    targetRevision: main
+    path: cluster-resources
+  destination:
+    server: https://kubernetes.default.svc
+    # Every resource in this app is cluster-scoped, so this only sets the
+    # default namespace for the sync — it does not scope the objects.
+    namespace: parent-ns
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
