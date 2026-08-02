@@ -75,18 +75,32 @@ PF_PID=$!
 until curl -s -o /dev/null "http://localhost:${PORT}/api/v1/info" 2>/dev/null; do sleep 1; done
 TOKEN="$(kubectl -n "$SUBMIT_NS" create token "$SUBMIT_SA" --duration=10m)"
 
-submit() { # $1 = namespace -> prints HTTP code
-  curl -s -o /dev/null -w '%{http_code}' -X POST \
+submit() { # $1 = namespace -> prints "<http_code> <body>"
+  curl -s -w ' %{http_code}' -X POST \
     -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
     -d "{\"namespace\":\"$1\",\"resourceKind\":\"ClusterWorkflowTemplate\",\"resourceName\":\"$TEMPLATE\",\"submitOptions\":{\"generateName\":\"negtest-\"}}" \
     "http://localhost:${PORT}/api/v1/workflows/$1/submit"
 }
 
-CODE_NEG="$(submit "$NEG_NS")"
-[[ "$CODE_NEG" == "403" ]] && ok "submit into $NEG_NS refused (HTTP 403)" \
-                           || bad "submit into $NEG_NS returned HTTP $CODE_NEG, expected 403"
+RESP_NEG="$(submit "$NEG_NS")"
+CODE_NEG="${RESP_NEG##* }"
+if [[ "$CODE_NEG" != "403" ]]; then
+  bad "submit into $NEG_NS returned HTTP $CODE_NEG, expected 403"
+else
+  # Report WHICH layer refused. Both are valid denials, but conflating them
+  # hides the case where RBAC has been opened up and only admission remains.
+  if grep -q 'ValidatingAdmissionPolicy' <<<"$RESP_NEG"; then
+    ok "submit into $NEG_NS refused (HTTP 403, by admission policy)"
+    echo "      NOTE: refused by admission, NOT RBAC — something grants this" >&2
+    echo "            namespace create on workflows. A workflow that does not" >&2
+    echo "            reference a ClusterWorkflowTemplate would be admitted." >&2
+  else
+    ok "submit into $NEG_NS refused (HTTP 403, by RBAC)"
+  fi
+fi
 
-CODE_GOOD="$(submit "$GOOD_NS")"
+RESP_GOOD="$(submit "$GOOD_NS")"
+CODE_GOOD="${RESP_GOOD##* }"
 [[ "$CODE_GOOD" == "200" ]] && ok "control: submit into $GOOD_NS allowed (HTTP 200)" \
                             || bad "control: submit into $GOOD_NS returned HTTP $CODE_GOOD, expected 200"
 
