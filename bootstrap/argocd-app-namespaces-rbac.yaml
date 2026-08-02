@@ -31,6 +31,11 @@ kind: Role
 metadata:
   name: argocd-server
   namespace: parent-ns
+  annotations:
+    # HNC propagates Roles/RoleBindings to descendants. These are already
+    # created per namespace by this file, so a propagated copy would
+    # collide with the one below it.
+    propagate.hnc.x-k8s.io/none: "true"
 rules:
   - apiGroups: ["argoproj.io"]
     resources: ["applications", "applicationsets"]
@@ -41,6 +46,11 @@ kind: RoleBinding
 metadata:
   name: argocd-server
   namespace: parent-ns
+  annotations:
+    # HNC propagates Roles/RoleBindings to descendants. These are already
+    # created per namespace by this file, so a propagated copy would
+    # collide with the one below it.
+    propagate.hnc.x-k8s.io/none: "true"
 subjects:
   - kind: ServiceAccount
     name: argocd-server
@@ -55,6 +65,11 @@ kind: Role
 metadata:
   name: argocd-application-controller
   namespace: parent-ns
+  annotations:
+    # HNC propagates Roles/RoleBindings to descendants. These are already
+    # created per namespace by this file, so a propagated copy would
+    # collide with the one below it.
+    propagate.hnc.x-k8s.io/none: "true"
 rules:
   - apiGroups: ["argoproj.io"]
     resources: ["applications", "applicationsets"]
@@ -65,6 +80,11 @@ kind: RoleBinding
 metadata:
   name: argocd-application-controller
   namespace: parent-ns
+  annotations:
+    # HNC propagates Roles/RoleBindings to descendants. These are already
+    # created per namespace by this file, so a propagated copy would
+    # collide with the one below it.
+    propagate.hnc.x-k8s.io/none: "true"
 subjects:
   - kind: ServiceAccount
     name: argocd-application-controller

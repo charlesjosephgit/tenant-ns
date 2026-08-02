@@ -52,6 +52,12 @@ kind: Role
 metadata:
   name: argo-ui-viewer
   namespace: parent-ns
+  annotations:
+    # HNC copies Roles/RoleBindings to descendants verbatim. Each namespace
+    # needs its OWN argo-ui binding pointing at its OWN SA, so this pair must
+    # not descend — otherwise tenant-ns would be granted to parent-ns/argo-ui
+    # and lose its own binding, inverting the per-namespace UI scoping.
+    propagate.hnc.x-k8s.io/none: "true"
 rules:
   - apiGroups: ["argoproj.io"]
     resources: ["workflows", "workflowtemplates", "cronworkflows"]
@@ -70,6 +76,8 @@ kind: RoleBinding
 metadata:
   name: argo-ui-viewer
   namespace: parent-ns
+  annotations:
+    propagate.hnc.x-k8s.io/none: "true"
 subjects:
   - kind: ServiceAccount
     name: argo-ui

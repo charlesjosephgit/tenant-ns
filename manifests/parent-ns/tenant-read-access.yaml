@@ -15,11 +15,20 @@
 #
 # Both objects are namespaced to parent-ns: a RoleBinding grants access to
 # resources in ITS OWN namespace, while its subjects may live elsewhere.
+#
+# HNC: both objects are marked non-propagating. HNC always propagates Roles and
+# RoleBindings to descendant namespaces and copies them VERBATIM, so without
+# this annotation tenant-ns would receive its own copy of the pair below —
+# granting tenant-ns/default get/list/watch on secrets IN TENANT-NS, which it
+# cannot do today. The binding's subject is already tenant-ns/default, so the
+# propagated copy would be self-referential and silently escalate privilege.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: parent-ns-config-reader
   namespace: parent-ns
+  annotations:
+    propagate.hnc.x-k8s.io/none: "true"
 rules:
   - apiGroups: [""]
     resources:
@@ -34,6 +43,8 @@ kind: RoleBinding
 metadata:
   name: tenant-ns-reads-parent-ns
   namespace: parent-ns
+  annotations:
+    propagate.hnc.x-k8s.io/none: "true"
 subjects:
   # The subject lives in tenant-ns; the permissions apply in parent-ns.
   - kind: ServiceAccount
