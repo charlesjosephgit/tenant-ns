@@ -7,10 +7,14 @@ apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: tenant-ns-resources
-  # Lives in parent-ns, the management namespace, alongside the parent app.
-  # Putting it in tenant-ns instead would mean adding tenant-ns to
-  # `application.namespaces` and giving argocd-server RBAC there — and would
-  # hand tenants edit access to their own Application.
+  # Lives alongside the resources it manages. This requires tenant-ns in
+  # `application.namespaces` (argocd-cmd-params-cm), in the AppProject's
+  # `sourceNamespaces`, and a Role/RoleBinding pair for argocd-server and
+  # argocd-application-controller — see bootstrap/argocd-app-namespaces-rbac.yaml.
+  #
+  # Trade-off of this placement: anyone with edit rights in tenant-ns can now
+  # modify this Application, and so redirect what gets deployed into their own
+  # namespace. Keep it in parent-ns instead if tenants are not trusted that far.
   namespace: tenant-ns
 spec:
   project: default
