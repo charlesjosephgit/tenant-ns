@@ -62,7 +62,7 @@ if ! kubectl -n "$NAMESPACE" get secret tenant-workflow-credentials >/dev/null 2
   echo "error: Secret/tenant-workflow-credentials missing in '$NAMESPACE'." >&2
   echo "       The ClusterExternalSecret provisions only the namespaces named in its" >&2
   echo "       namespaceSelectors allowlist. Add '$NAMESPACE' to the values list in" >&2
-  echo "       cluster-resources/clusterexternalsecret.yaml, commit, and let ArgoCD sync." >&2
+  echo "       manifests/parent-ns/clusterexternalsecret.yaml, commit, and let ArgoCD sync." >&2
   exit 1
 fi
 echo "    ClusterWorkflowTemplate/$TEMPLATE and Secret/tenant-workflow-credentials present"

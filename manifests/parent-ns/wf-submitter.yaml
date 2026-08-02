@@ -1,0 +1,41 @@
+# Identity used by parent-ns workloads to submit workflows into tenant
+# namespaces through the argo-server API.
+#
+# With argo-server running in `--auth-mode=client`, the caller's own
+# ServiceAccount token is what authorises the request: argo-server builds a
+# Kubernetes client from that token, so every permission must be held by this
+# SA, not by argo-server.
+#
+# This file holds only the parent-ns and cluster-scoped halves. The permission
+# to actually run workflows belongs to the tenant and lives in
+# manifests/tenant-ns/wf-submitter-access.yaml — delivered by a separate
+# ArgoCD app, so the two must be kept in step.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: wf-submitter
+  namespace: parent-ns
+---
+# ClusterWorkflowTemplates are cluster-scoped, so reading the template being
+# submitted needs a ClusterRole rather than a namespaced Role.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: argo-clusterworkflowtemplate-reader
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["clusterworkflowtemplates"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: wf-submitter-reads-clusterworkflowtemplates
+subjects:
+  - kind: ServiceAccount
+    name: wf-submitter
+    namespace: parent-ns
+roleRef:
+  kind: ClusterRole
+  name: argo-clusterworkflowtemplate-reader
+  apiGroup: rbac.authorization.k8s.io

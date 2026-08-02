@@ -2,7 +2,7 @@
 # through the argo-server API, authenticating with its own ServiceAccount
 # token.
 #
-# Deliberately NOT under cluster-resources/: that path is synced by ArgoCD,
+# Deliberately NOT under manifests/: those paths are synced by ArgoCD,
 # and a run-once Pod does not belong in a continuously-reconciled app.
 # Apply it by hand:
 #

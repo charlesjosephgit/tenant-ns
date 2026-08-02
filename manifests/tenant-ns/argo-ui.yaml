@@ -1,0 +1,46 @@
+# Read-only identity for logging into the Argo Workflows UI as tenant-ns.
+#
+# Its ClusterRoleBinding for cluster-scoped templates is defined once, in
+# manifests/parent-ns/argo-ui.yaml, and names this SA as a subject.
+#
+# Deliberately read-only — no create/delete on workflows. To let a UI user
+# submit or resubmit, add "create" on workflows to the Role below.
+#
+# Fetch a token with: ./scripts/argo-ui-token.sh tenant-ns
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: argo-ui
+  namespace: tenant-ns
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: argo-ui-viewer
+  namespace: tenant-ns
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["workflows", "workflowtemplates", "cronworkflows"]
+    verbs: ["get", "list", "watch"]
+  # Log streaming watches pods and then reads their logs — both are needed,
+  # `pods/log` alone yields "cannot watch resource pods".
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: argo-ui-viewer
+  namespace: tenant-ns
+subjects:
+  - kind: ServiceAccount
+    name: argo-ui
+    namespace: tenant-ns
+roleRef:
+  kind: Role
+  name: argo-ui-viewer
+  apiGroup: rbac.authorization.k8s.io

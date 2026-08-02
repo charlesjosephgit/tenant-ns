@@ -1,0 +1,32 @@
+# Parent-ns app: the control plane. Owns everything cluster-scoped plus the
+# parent-ns namespaced resources.
+#
+# Cluster-scoped objects live here rather than in the tenant app because they
+# are shared infrastructure — one ClusterWorkflowTemplate serves every tenant,
+# so no single tenant should own its lifecycle.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: parent-ns-resources
+  # Both Applications live in parent-ns, the management namespace. This needs
+  # `application.namespaces` in argocd-cmd-params-cm, a matching
+  # `sourceNamespaces` on the AppProject, and the per-namespace argocd-server
+  # RBAC in bootstrap/argocd-parent-ns-rbac.yaml.
+  namespace: parent-ns
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/charlesjosephgit/tenant-ns.git
+    targetRevision: main
+    path: manifests/parent-ns
+  destination:
+    server: https://kubernetes.default.svc
+    # Default namespace for resources that do not name one. Cluster-scoped
+    # objects in this path ignore it.
+    namespace: parent-ns
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false

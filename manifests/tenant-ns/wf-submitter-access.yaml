@@ -1,0 +1,48 @@
+# Tenant-side half of the cross-namespace submit path.
+#
+# The wf-submitter ServiceAccount itself lives in parent-ns
+# (manifests/parent-ns/wf-submitter.yaml). This grants that foreign identity
+# permission to run workflows HERE — a RoleBinding applies to its own
+# namespace while its subjects may live elsewhere.
+#
+# Because the two halves are now delivered by different ArgoCD apps, deleting
+# the tenant app revokes submission into this namespace without touching the
+# submitter identity. That is the intended blast radius.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: argo-workflow-submitter
+  namespace: tenant-ns
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["workflows"]
+    verbs: ["create", "get", "list", "watch"]
+  # The argo-server log endpoint streams on the caller's behalf: it watches
+  # pods to follow them, so `pods/log` alone yields
+  # "cannot watch resource pods". Both rules are required.
+  #
+  # Cost of granting these: the caller can read anything a tenant workflow
+  # prints, and can see tenant pod specs — which expose the NAMES of mounted
+  # Secrets and their keys, though not their values. Drop both rules if
+  # submitters should be write-only and blind to output.
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: parent-ns-submits-to-tenant-ns
+  namespace: tenant-ns
+subjects:
+  # Subject lives in parent-ns; the permissions apply in tenant-ns.
+  - kind: ServiceAccount
+    name: wf-submitter
+    namespace: parent-ns
+roleRef:
+  kind: Role
+  name: argo-workflow-submitter
+  apiGroup: rbac.authorization.k8s.io

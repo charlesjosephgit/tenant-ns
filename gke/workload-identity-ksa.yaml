@@ -12,7 +12,7 @@
 # yields pods that fail at token-exchange time, not at startup, which is a
 # confusing failure to debug.
 #
-# Not under cluster-resources/: the current cluster is docker-desktop, where
+# Not under manifests/: the current cluster is docker-desktop, where
 # Workload Identity does not exist. Substitute GSA_EMAIL before applying, or
 # let the script do it.
 #

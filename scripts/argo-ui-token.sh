@@ -32,8 +32,8 @@ command -v kubectl >/dev/null 2>&1 || { echo "error: kubectl is required" >&2; e
 
 kubectl -n "$NAMESPACE" get serviceaccount "$SA" >/dev/null 2>&1 || {
   echo "error: ServiceAccount '$SA' not found in namespace '$NAMESPACE'." >&2
-  echo "       It is defined in cluster-resources/argo-ui-rbac.yaml — check the" >&2
-  echo "       cluster-resources ArgoCD app has synced." >&2
+  echo "       It is defined in manifests/<namespace>/argo-ui.yaml — check that" >&2
+  echo "       namespace's ArgoCD app has synced." >&2
   exit 1
 }
 

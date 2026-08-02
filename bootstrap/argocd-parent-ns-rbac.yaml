@@ -13,7 +13,7 @@
 # controller holds a cluster-wide role in the default install — which is why
 # the failure only shows up when syncing from the UI.
 #
-# NOT under cluster-resources/: this grants the permission needed to manage
+# NOT under manifests/: this grants the permission needed to manage
 # that very app. Delivering it through the app would be circular, and a prune
 # would lock you out. It belongs with the ArgoCD installation, so apply it
 # out of band:

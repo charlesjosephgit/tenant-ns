@@ -1,25 +1,27 @@
-# Read-only identities for logging into the Argo Workflows UI, one per
-# namespace. With argo-server in --auth-mode=client the UI has no login of its
-# own: you paste a ServiceAccount token, and what you can see is exactly what
-# that SA's RBAC allows. A token for the parent-ns SA therefore shows parent-ns
-# workflows, and likewise for tenant-ns.
+# Read-only identity for logging into the Argo Workflows UI as parent-ns.
+#
+# With argo-server in --auth-mode=client the UI has no login of its own: you
+# paste a ServiceAccount token, and what you can see is exactly what that SA's
+# RBAC allows. This token shows parent-ns; the tenant equivalent lives in
+# manifests/tenant-ns/argo-ui.yaml.
 #
 # Deliberately read-only — no create/delete on workflows. To let a UI user
-# submit or resubmit, add "create" on workflows to that namespace's Role.
+# submit or resubmit, add "create" on workflows to the Role below.
+#
+# Fetch a token with: ./scripts/argo-ui-token.sh parent-ns
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: argo-ui
   namespace: parent-ns
 ---
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: argo-ui
-  namespace: tenant-ns
----
 # The UI lists cluster-scoped templates on load, so this needs a ClusterRole.
 # Without it the Cluster Workflow Templates page returns 403.
+#
+# Cluster-scoped, so it ships with the parent-ns app — but it deliberately
+# names the tenant-ns SA too, so both UI logins work from one binding. RBAC
+# permits naming a subject that does not exist yet, so ordering between the
+# two apps does not matter.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -72,36 +74,6 @@ subjects:
   - kind: ServiceAccount
     name: argo-ui
     namespace: parent-ns
-roleRef:
-  kind: Role
-  name: argo-ui-viewer
-  apiGroup: rbac.authorization.k8s.io
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: argo-ui-viewer
-  namespace: tenant-ns
-rules:
-  - apiGroups: ["argoproj.io"]
-    resources: ["workflows", "workflowtemplates", "cronworkflows"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: [""]
-    resources: ["pods"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: [""]
-    resources: ["pods/log"]
-    verbs: ["get"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: argo-ui-viewer
-  namespace: tenant-ns
-subjects:
-  - kind: ServiceAccount
-    name: argo-ui
-    namespace: tenant-ns
 roleRef:
   kind: Role
   name: argo-ui-viewer

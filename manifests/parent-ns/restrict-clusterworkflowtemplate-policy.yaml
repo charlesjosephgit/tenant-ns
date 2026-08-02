@@ -45,7 +45,7 @@ spec:
       message: >-
         ClusterWorkflowTemplates may only be referenced from approved tenant
         namespaces. Add this namespace to the allowlist in
-        cluster-resources/restrict-clusterworkflowtemplate-policy.yaml.
+        manifests/parent-ns/restrict-clusterworkflowtemplate-policy.yaml.
       reason: Forbidden
 ---
 apiVersion: admissionregistration.k8s.io/v1
