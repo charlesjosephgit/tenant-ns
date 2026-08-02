@@ -1,14 +1,12 @@
 # Shared data owned by parent-ns and read cross-namespace by tenants.
 # Access is granted by parent-ns-read-rolebinding.yaml.
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: parent-shared-config
-  namespace: parent-ns
-data:
-  region: eu-west-1
-  tier: shared
----
+#
+# Non-secret config used to live here as a ConfigMap. It now travels inline as
+# a raw artifact in the tenant-shared-ops ClusterWorkflowTemplate, which is
+# cluster-scoped and so needs no replication or RBAC to reach a tenant.
+# Only secret material — which must never be inlined into that template —
+# remains here.
+#
 # WARNING: placeholder value, committed in plaintext. Anyone with repo access
 # can read it. Before this holds a real credential, source it from the
 # ClusterSecretStore (as tenant-workflow-credentials does) instead of literals.

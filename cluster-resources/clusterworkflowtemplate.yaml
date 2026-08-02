@@ -5,7 +5,7 @@ metadata:
 spec:
   entrypoint: main
   # Bound to parent-ns by parent-ns-read-rolebinding.yaml, which is what makes
-  # the cross-namespace reads below succeed.
+  # the cross-namespace secret read below succeed.
   serviceAccountName: default
   arguments:
     parameters:
@@ -24,8 +24,8 @@ spec:
               parameters:
                 - name: message
                   value: "{{inputs.parameters.message}}"
-          - name: parent-configmap
-            template: read-parent-configmap
+          - name: shared-config
+            template: read-shared-config
           - name: parent-secret
             template: read-parent-secret
 
@@ -56,25 +56,43 @@ spec:
                 name: tenant-workflow-credentials
                 key: api-token
 
-    # Cross-namespace access: parent-ns objects CANNOT be mounted from a
-    # tenant-ns pod, so they must be fetched through the Kubernetes API.
+    # Shared non-secret config, carried by this template rather than by a
+    # ConfigMap. A ClusterWorkflowTemplate is cluster-scoped, so every tenant
+    # namespace resolves the same copy — no replication, no cross-namespace
+    # RBAC. The raw artifact lands as a real file at `path`, so it is a
+    # drop-in replacement for a mounted ConfigMap volume.
     #
-    # Two constraints shape these steps:
+    # NEVER put secret material here: this object is readable by anyone with
+    # `get` on clusterworkflowtemplates, and the values render into every
+    # Workflow spec and the Argo UI. Secrets stay in ESO.
+    - name: read-shared-config
+      inputs:
+        artifacts:
+          - name: config
+            path: /etc/tenant/config.yaml
+            raw:
+              data: |
+                region: eu-west-1
+                tier: shared
+                endpoints:
+                  - https://a.internal
+                  - https://b.internal
+      container:
+        image: alpine:3.20
+        command: [sh, -c]
+        args:
+          - |
+            echo "shared config, inlined from the template:"
+            cat /etc/tenant/config.yaml
+
+    # Cross-namespace access: parent-ns objects CANNOT be mounted from a
+    # tenant-ns pod, so the Secret must be fetched through the Kubernetes API.
+    #
+    # Two constraints shape this step:
     #   1. rancher/kubectl is distroless — no shell, so `command: [sh, -c]`
     #      fails. kubectl is the entrypoint; pass bare args.
     #   2. Use jsonpath, NOT go-template. Argo substitutes `{{...}}` itself
     #      and would fail to resolve go-template braces as workflow variables.
-    - name: read-parent-configmap
-      container:
-        image: rancher/kubectl:v1.31.0
-        args:
-          - get
-          - configmap
-          - parent-shared-config
-          - --namespace=parent-ns
-          - -o
-          - jsonpath={.data.region}{"\n"}
-
     - name: read-parent-secret
       container:
         image: rancher/kubectl:v1.31.0
