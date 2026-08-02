@@ -29,7 +29,7 @@ spec:
     # Allowlist. Kept in step with the ClusterExternalSecret and
     # ClusterSecretStore lists — all three must name the same tenants.
     - name: allowedNamespaces
-      expression: "['parent-ns', 'tenant-ns']"
+      expression: "['parent-ns', 'tenant-ns', 'negative-ns']"
 
     # Templates this policy guards, by name.
     #
