@@ -30,21 +30,34 @@ spec:
     # ClusterSecretStore lists — all three must name the same tenants.
     - name: allowedNamespaces
       expression: "['parent-ns', 'tenant-ns']"
-    # True only when this Workflow reaches for a CLUSTER-scoped template.
-    # Namespaced workflowTemplateRefs are none of this policy's business.
-    - name: usesClusterTemplate
+
+    # Templates this policy guards, by name.
+    #
+    # SCOPED BY NAME ON PURPOSE — and this fails open for anything not listed.
+    # A ClusterWorkflowTemplate added later is referenceable from ANY namespace
+    # until its name is added here. Add the name at the same time you create
+    # the template, or it is unprotected.
+    - name: protectedTemplates
+      expression: "['tenant-shared-ops']"
+
+    # True only when this Workflow reaches for one of the guarded cluster
+    # templates. Namespaced workflowTemplateRefs are none of this policy's
+    # business, and neither are unlisted cluster templates.
+    - name: usesProtectedTemplate
       expression: >-
         has(object.spec) &&
         has(object.spec.workflowTemplateRef) &&
         has(object.spec.workflowTemplateRef.clusterScope) &&
-        object.spec.workflowTemplateRef.clusterScope == true
+        object.spec.workflowTemplateRef.clusterScope == true &&
+        has(object.spec.workflowTemplateRef.name) &&
+        object.spec.workflowTemplateRef.name in variables.protectedTemplates
   validations:
     - expression: >-
-        !variables.usesClusterTemplate ||
+        !variables.usesProtectedTemplate ||
         (request.namespace in variables.allowedNamespaces)
       message: >-
-        ClusterWorkflowTemplates may only be referenced from approved tenant
-        namespaces. Add this namespace to the allowlist in
+        This ClusterWorkflowTemplate may only be referenced from approved
+        tenant namespaces. Add this namespace to allowedNamespaces in
         manifests/parent-ns/restrict-clusterworkflowtemplate-policy.yaml.
       reason: Forbidden
 ---
