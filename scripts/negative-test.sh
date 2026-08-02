@@ -95,7 +95,13 @@ CODE_ANON="$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:${PORT}/ap
                             || bad "unauthenticated call returned HTTP $CODE_ANON, expected 401"
 
 echo "==> Gate 3: even a cluster-admin submission must not succeed in $NEG_NS"
-WF="$(kubectl create -o jsonpath='{.metadata.name}' -f - <<EOF
+# Two acceptable outcomes, depending on whether the ValidatingAdmissionPolicy
+# is in force:
+#   preferred  the API server rejects the create outright (nothing is admitted)
+#   fallback   the create is admitted but the run cannot complete, because its
+#              Secret and parent-ns access are absent
+# `|| true` keeps `set -e` from aborting on the expected rejection.
+CREATE_OUT="$(kubectl create -o jsonpath='{.metadata.name}' -f - 2>&1 <<EOF || true
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:
@@ -107,21 +113,63 @@ spec:
     clusterScope: true
 EOF
 )"
-echo "      admin-submitted: $WF"
-for _ in $(seq 1 20); do
-  PHASE="$(kubectl -n "$NEG_NS" get wf "$WF" -o jsonpath='{.status.phase}' 2>/dev/null || true)"
-  [[ "$PHASE" == "Succeeded" || "$PHASE" == "Failed" || "$PHASE" == "Error" ]] && break
+
+if grep -qi 'denied request\|is forbidden' <<<"$CREATE_OUT"; then
+  ok "admission rejected the cluster-admin create outright"
+  echo "      $(sed -e 's/^Error from server (Forbidden): //' <<<"$CREATE_OUT" | head -c 160)…"
+else
+  WF="$CREATE_OUT"
+  echo "      admitted as: $WF (admission policy not enforcing — checking runtime gate)"
+  PHASE=""
+  for _ in $(seq 1 20); do
+    PHASE="$(kubectl -n "$NEG_NS" get wf "$WF" -o jsonpath='{.status.phase}' 2>/dev/null || true)"
+    [[ "$PHASE" == "Succeeded" || "$PHASE" == "Failed" || "$PHASE" == "Error" ]] && break
+    sleep 3
+  done
+  echo "      phase: ${PHASE:-<none>}"
+  [[ "$PHASE" != "Succeeded" ]] && ok "workflow did not succeed in $NEG_NS" \
+                                || bad "workflow SUCCEEDED in $NEG_NS — isolation is broken"
+  echo "      per-step failure reasons:"
+  # .status.nodes is a map keyed by node id, so iterate values, not an array.
+  kubectl -n "$NEG_NS" get wf "$WF" -o json \
+    | jq -r '.status.nodes // {} | to_entries[] | select(.value.type == "Pod")
+             | "        \(.value.displayName): \(.value.phase) — \(.value.message // "")"'
+fi
+
+echo "==> Gate 4: $NEG_NS must not be able to PULL from the ClusterSecretStore"
+# spec.conditions on the store closes this; without it, any namespace could
+# declare its own ExternalSecret and retrieve the same material.
+kubectl apply -f - >/dev/null 2>&1 <<EOF
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: negtest-bypass
+  namespace: $NEG_NS
+spec:
+  secretStoreRef:
+    name: tenant-shared-store
+    kind: ClusterSecretStore
+  refreshInterval: 1h
+  target:
+    name: negtest-bypass
+    creationPolicy: Owner
+  data:
+    - secretKey: api-token
+      remoteRef:
+        key: /tenant/api-token
+EOF
+for _ in $(seq 1 10); do
+  READY="$(kubectl -n "$NEG_NS" get externalsecret negtest-bypass -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)"
+  [[ -n "$READY" ]] && break
   sleep 3
 done
-echo "      phase: ${PHASE:-<none>}"
-[[ "$PHASE" != "Succeeded" ]] && ok "workflow did not succeed in $NEG_NS" \
-                              || bad "workflow SUCCEEDED in $NEG_NS — isolation is broken"
-
-echo "      per-step failure reasons:"
-# .status.nodes is a map keyed by node id, so iterate values, not an array.
-kubectl -n "$NEG_NS" get wf "$WF" -o json \
-  | jq -r '.status.nodes // {} | to_entries[] | select(.value.type == "Pod")
-           | "        \(.value.displayName): \(.value.phase) — \(.value.message // "")"'
+if kubectl -n "$NEG_NS" get secret negtest-bypass >/dev/null 2>&1; then
+  bad "$NEG_NS pulled secret material directly from the ClusterSecretStore"
+else
+  ok "$NEG_NS denied by ClusterSecretStore spec.conditions"
+fi
+kubectl -n "$NEG_NS" delete externalsecret negtest-bypass --ignore-not-found >/dev/null 2>&1
+kubectl -n "$NEG_NS" delete secret negtest-bypass --ignore-not-found >/dev/null 2>&1
 
 echo
 echo "==> $PASS passed, $FAIL failed"
