@@ -1,0 +1,58 @@
+# Limits which namespaces may reference cluster-scoped WorkflowTemplates.
+#
+# WHY NOT RBAC: `clusterworkflowtemplates` is cluster-scoped, and a ClusterRole
+# cannot be restricted per namespace. Worse, RBAC on the caller only gates the
+# argo-server submit path — a direct `kubectl create workflow` with a
+# workflowTemplateRef is resolved by the workflow-controller using the
+# CONTROLLER's permissions, so the submitter never needs read access to the
+# template at all.
+#
+# A ValidatingAdmissionPolicy runs in the API server on the Workflow object
+# itself, so it applies to every path — argo-server, kubectl, CronWorkflows,
+# and cluster-admins alike. That last part is what no RBAC rule can do.
+#
+# Requires Kubernetes 1.30+ (ValidatingAdmissionPolicy is GA).
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: restrict-cluster-workflow-templates
+spec:
+  # Fail closed: if the policy cannot be evaluated, reject rather than admit.
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["argoproj.io"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["workflows"]
+  variables:
+    # Allowlist. Kept in step with the ClusterExternalSecret and
+    # ClusterSecretStore lists — all three must name the same tenants.
+    - name: allowedNamespaces
+      expression: "['parent-ns', 'tenant-ns']"
+    # True only when this Workflow reaches for a CLUSTER-scoped template.
+    # Namespaced workflowTemplateRefs are none of this policy's business.
+    - name: usesClusterTemplate
+      expression: >-
+        has(object.spec) &&
+        has(object.spec.workflowTemplateRef) &&
+        has(object.spec.workflowTemplateRef.clusterScope) &&
+        object.spec.workflowTemplateRef.clusterScope == true
+  validations:
+    - expression: >-
+        !variables.usesClusterTemplate ||
+        (request.namespace in variables.allowedNamespaces)
+      message: >-
+        ClusterWorkflowTemplates may only be referenced from approved tenant
+        namespaces. Add this namespace to the allowlist in
+        cluster-resources/restrict-clusterworkflowtemplate-policy.yaml.
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: restrict-cluster-workflow-templates
+spec:
+  policyName: restrict-cluster-workflow-templates
+  # Deny outright rather than only recording an audit annotation.
+  validationActions: ["Deny"]
