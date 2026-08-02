@@ -30,6 +30,10 @@ SUBMIT_SA="${SUBMIT_SA:-wf-submitter}"
 SUBMIT_NS="${SUBMIT_NS:-parent-ns}"
 PORT="${PORT:-2746}"
 ARGO_NS="${ARGO_NS:-argo}"
+# Root of the tenant hierarchy. Membership is HNC's tree label, which the HNC
+# webhook owns — a namespace cannot label its way in.
+TREE_ROOT="${TREE_ROOT:-parent-ns}"
+TREE_LABEL="${TREE_ROOT}.tree.hnc.x-k8s.io/depth"
 
 for bin in kubectl curl jq; do
   command -v "$bin" >/dev/null 2>&1 || { echo "error: '$bin' required" >&2; exit 1; }
@@ -48,15 +52,16 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-echo "==> Setup: ensure $NEG_NS exists and is absent from the ESO allowlist"
+echo "==> Setup: ensure $NEG_NS exists and is outside the parent-ns hierarchy"
 kubectl create namespace "$NEG_NS" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-# The allowlist is pinned by name, so no labelling is involved. Assert the
-# namespace genuinely is not named in the selector rather than trusting it.
-kubectl get clusterexternalsecret tenant-workflow-credentials -o json \
-  | jq -e --arg ns "$NEG_NS" '
-      [.spec.namespaceSelectors[]?.matchExpressions[]?.values[]?] | index($ns) == null' >/dev/null \
-  && ok "$NEG_NS not named in the namespaceSelectors allowlist" \
-  || bad "$NEG_NS IS named in the allowlist"
+# Tenancy is now structural: membership is the HNC tree label, not a list.
+# Assert the namespace is genuinely outside the subtree rather than trusting it.
+if kubectl get ns "$NEG_NS" -o jsonpath='{.metadata.labels}' \
+     | jq -e '.["'"$TREE_LABEL"'"] == null' >/dev/null 2>&1; then
+  ok "$NEG_NS is not a descendant of $TREE_ROOT (no $TREE_LABEL)"
+else
+  bad "$NEG_NS IS in the $TREE_ROOT hierarchy — it would be treated as a tenant"
+fi
 
 echo "==> Gate 1: ClusterExternalSecret must not provision into $NEG_NS"
 PROV="$(kubectl get clusterexternalsecret tenant-workflow-credentials -o jsonpath='{.status.provisionedNamespaces}')"

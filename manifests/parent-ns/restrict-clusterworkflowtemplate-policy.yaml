@@ -26,10 +26,19 @@ spec:
         operations: ["CREATE", "UPDATE"]
         resources: ["workflows"]
   variables:
-    # Allowlist. Kept in step with the ClusterExternalSecret and
-    # ClusterSecretStore lists — all three must name the same tenants.
-    - name: allowedNamespaces
-      expression: "['parent-ns', 'tenant-ns', 'negative-ns']"
+    # Tenants are the parent-ns HNC subtree, read off the namespace's tree
+    # label rather than an enumerated list. Same signal the
+    # ClusterExternalSecret and ClusterSecretStore selectors now use, so the
+    # three controls cannot drift apart as tenants are added or removed.
+    #
+    # `namespaceObject` exposes the Namespace resource to CEL. HNC owns these
+    # labels and its webhook rejects manual edits, so this cannot be spoofed
+    # by labelling a namespace — joining the tree is the only way in.
+    - name: inTenantTree
+      expression: >-
+        has(namespaceObject.metadata) &&
+        has(namespaceObject.metadata.labels) &&
+        'parent-ns.tree.hnc.x-k8s.io/depth' in namespaceObject.metadata.labels
 
     # Templates this policy guards, by name.
     #
@@ -53,12 +62,12 @@ spec:
         object.spec.workflowTemplateRef.name in variables.protectedTemplates
   validations:
     - expression: >-
-        !variables.usesProtectedTemplate ||
-        (request.namespace in variables.allowedNamespaces)
+        !variables.usesProtectedTemplate || variables.inTenantTree
       message: >-
-        This ClusterWorkflowTemplate may only be referenced from approved
-        tenant namespaces. Add this namespace to allowedNamespaces in
-        manifests/parent-ns/restrict-clusterworkflowtemplate-policy.yaml.
+        This ClusterWorkflowTemplate may only be referenced from namespaces in
+        the parent-ns hierarchy. Make this namespace a child of parent-ns
+        ("kubectl hns set <ns> --parent parent-ns") rather than editing this
+        policy.
       reason: Forbidden
 ---
 apiVersion: admissionregistration.k8s.io/v1
