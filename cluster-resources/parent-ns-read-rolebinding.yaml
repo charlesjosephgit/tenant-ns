@@ -1,0 +1,41 @@
+# Lets workloads in tenant-ns read ConfigMaps and Secrets that live in
+# parent-ns, via the Kubernetes API.
+#
+# NOTE: this grants API read access only. A pod in tenant-ns still cannot
+# mount a parent-ns ConfigMap/Secret as a volume, or pull it in with envFrom
+# or secretKeyRef — those references are resolved strictly within the pod's
+# own namespace. Reaching this data from a container means calling the API
+# (kubectl / client-go / an initContainer), or replicating the object into
+# tenant-ns, which is what the ClusterExternalSecret already does.
+#
+# Both objects are namespaced to parent-ns: a RoleBinding grants access to
+# resources in ITS OWN namespace, while its subjects may live elsewhere.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: parent-ns-config-reader
+  namespace: parent-ns
+rules:
+  - apiGroups: [""]
+    resources:
+      - configmaps
+      - secrets
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: tenant-ns-reads-parent-ns
+  namespace: parent-ns
+subjects:
+  # The subject lives in tenant-ns; the permissions apply in parent-ns.
+  - kind: ServiceAccount
+    name: default
+    namespace: tenant-ns
+roleRef:
+  kind: Role
+  name: parent-ns-config-reader
+  apiGroup: rbac.authorization.k8s.io
