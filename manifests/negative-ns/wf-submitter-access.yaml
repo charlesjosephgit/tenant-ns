@@ -31,18 +31,3 @@ rules:
   - apiGroups: [""]
     resources: ["pods/log"]
     verbs: ["get"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: parent-ns-submits-to-negative-ns
-  namespace: negative-ns
-subjects:
-  # Subject lives in parent-ns; the permissions apply in negative-ns.
-  - kind: ServiceAccount
-    name: wf-submitter
-    namespace: parent-ns
-roleRef:
-  kind: Role
-  name: argo-workflow-submitter
-  apiGroup: rbac.authorization.k8s.io

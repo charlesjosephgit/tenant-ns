@@ -15,7 +15,7 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: submit-from-parent-ns
+  name: submit-from-parent-ns-3
   namespace: parent-ns
 spec:
   serviceAccountName: wf-submitter
@@ -35,7 +35,7 @@ spec:
             -H "Authorization: Bearer $TOKEN" \
             -H 'Content-Type: application/json' \
             -d '{
-                  "namespace": "tenant-ns",
+                  "namespace": "negative-ns",
                   "resourceKind": "ClusterWorkflowTemplate",
                   "resourceName": "tenant-shared-ops",
                   "submitOptions": {
@@ -43,7 +43,7 @@ spec:
                     "parameters": ["message=submitted by a pod in parent-ns"]
                   }
                 }' \
-            "$ARGO/api/v1/workflows/tenant-ns/submit")"
+            "$ARGO/api/v1/workflows/negative-ns/submit")"
 
           NAME="$(echo "$RESP" | grep -o '"name":"[^"]*"' | head -1 | cut -d'"' -f4)"
           if [ -z "$NAME" ]; then
