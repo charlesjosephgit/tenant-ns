@@ -7,10 +7,11 @@
 #   ClusterSecretStore -> ClusterExternalSecret -> per-namespace Secret
 #   -> ClusterWorkflowTemplate consuming that Secret as env vars.
 #
-# The argo-server in this cluster runs with `--auth-mode=server --secure=false`,
-# so the API is plain HTTP and needs no bearer token; the server uses its own
-# ServiceAccount. If auth-mode is ever changed to `client`, export ARGO_TOKEN
-# and this script will send it.
+# argo-server runs with `--auth-mode=client --secure=false`: plain HTTP, but
+# every request must carry a ServiceAccount token, and the caller's own RBAC
+# is what authorises the submit. Unless ARGO_TOKEN is supplied, this script
+# mints a short-lived token for the wf-submitter SA in parent-ns — the same
+# identity examples/submit-from-parent-ns-pod.yaml uses in-cluster.
 #
 # Usage:
 #   ./scripts/submit-shared-ops.sh [namespace]
@@ -20,7 +21,9 @@
 #   TEMPLATE    ClusterWorkflowTemplate name   (default: tenant-shared-ops)
 #   LOCAL_PORT  local port for the forward     (default: 2746)
 #   TIMEOUT     seconds to wait for completion (default: 180)
-#   ARGO_TOKEN  bearer token, only if auth-mode=client
+#   SUBMIT_SA   SA to mint a token for         (default: wf-submitter)
+#   SUBMIT_NS   namespace holding that SA      (default: parent-ns)
+#   ARGO_TOKEN  pre-existing token; skips minting
 #
 set -euo pipefail
 
@@ -29,10 +32,19 @@ TEMPLATE="${TEMPLATE:-tenant-shared-ops}"
 LOCAL_PORT="${LOCAL_PORT:-2746}"
 TIMEOUT="${TIMEOUT:-180}"
 ARGO_NS="${ARGO_NS:-argo}"
+SUBMIT_SA="${SUBMIT_SA:-wf-submitter}"
+SUBMIT_NS="${SUBMIT_NS:-parent-ns}"
 
 for bin in kubectl curl jq; do
   command -v "$bin" >/dev/null 2>&1 || { echo "error: '$bin' is required but not installed" >&2; exit 1; }
 done
+
+# argo-server is in client auth mode, so a token is mandatory. Mint a
+# short-lived one for the submitter SA unless the caller supplied their own.
+if [[ -z "${ARGO_TOKEN:-}" ]]; then
+  ARGO_TOKEN="$(kubectl -n "$SUBMIT_NS" create token "$SUBMIT_SA" --duration=1h)" \
+    || { echo "error: could not mint a token for ${SUBMIT_NS}/${SUBMIT_SA}" >&2; exit 1; }
+fi
 
 PF_PID=""
 cleanup() {
@@ -59,11 +71,7 @@ kubectl -n "$ARGO_NS" port-forward svc/argo-server "${LOCAL_PORT}:2746" >/dev/nu
 PF_PID=$!
 
 BASE="http://localhost:${LOCAL_PORT}"
-# Seeded with a harmless header so the array is never empty — bash 3.2 (the
-# system bash on macOS) treats "${arr[@]}" on an empty array as unbound under
-# `set -u`.
-AUTH=(-H "X-Argo-Client: submit-shared-ops")
-[[ -n "${ARGO_TOKEN:-}" ]] && AUTH+=(-H "Authorization: Bearer ${ARGO_TOKEN}")
+AUTH=(-H "Authorization: Bearer ${ARGO_TOKEN}")
 
 # Wait for the tunnel to accept connections rather than sleeping a fixed amount.
 for _ in $(seq 1 30); do

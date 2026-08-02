@@ -1,0 +1,72 @@
+# Demonstrates a parent-ns workload submitting a workflow into tenant-ns
+# through the argo-server API, authenticating with its own ServiceAccount
+# token.
+#
+# Deliberately NOT under cluster-resources/: that path is synced by ArgoCD,
+# and a run-once Pod does not belong in a continuously-reconciled app.
+# Apply it by hand:
+#
+#   kubectl delete pod submit-from-parent-ns -n parent-ns --ignore-not-found
+#   kubectl apply -f examples/submit-from-parent-ns-pod.yaml
+#   kubectl logs -f submit-from-parent-ns -n parent-ns
+#
+# The token is the projected SA token that kubelet mounts automatically. No
+# secret is baked into this manifest, and it rotates on its own.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: submit-from-parent-ns
+  namespace: parent-ns
+spec:
+  serviceAccountName: wf-submitter
+  restartPolicy: Never
+  containers:
+    - name: submit
+      image: curlimages/curl:8.10.1
+      command: [sh, -c]
+      args:
+        - |
+          set -eu
+          TOKEN="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)"
+          ARGO="http://argo-server.argo.svc.cluster.local:2746"
+
+          echo "==> Submitting tenant-shared-ops into tenant-ns"
+          RESP="$(curl -sS -X POST \
+            -H "Authorization: Bearer $TOKEN" \
+            -H 'Content-Type: application/json' \
+            -d '{
+                  "namespace": "tenant-ns",
+                  "resourceKind": "ClusterWorkflowTemplate",
+                  "resourceName": "tenant-shared-ops",
+                  "submitOptions": {
+                    "generateName": "from-parent-ns-",
+                    "parameters": ["message=submitted by a pod in parent-ns"]
+                  }
+                }' \
+            "$ARGO/api/v1/workflows/tenant-ns/submit")"
+
+          NAME="$(echo "$RESP" | grep -o '"name":"[^"]*"' | head -1 | cut -d'"' -f4)"
+          if [ -z "$NAME" ]; then
+            echo "submission failed:"
+            echo "$RESP"
+            exit 1
+          fi
+          echo "    submitted: $NAME"
+
+          echo "==> Polling for completion"
+          i=0
+          PHASE=""
+          while [ "$i" -lt 120 ]; do
+            PHASE="$(curl -sS -H "Authorization: Bearer $TOKEN" \
+              "$ARGO/api/v1/workflows/tenant-ns/$NAME" \
+              | grep -o '"phase":"[^"]*"' | head -1 | cut -d'"' -f4)"
+            case "$PHASE" in
+              Succeeded|Failed|Error) break ;;
+            esac
+            i=$((i + 1))
+            sleep 2
+          done
+
+          echo "    phase: $PHASE"
+          [ "$PHASE" = "Succeeded" ] || exit 1
+          echo "OK: parent-ns pod ran $NAME in tenant-ns using its SA token"

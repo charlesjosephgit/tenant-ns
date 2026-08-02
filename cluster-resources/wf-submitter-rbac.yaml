@@ -46,6 +46,13 @@ rules:
   - apiGroups: ["argoproj.io"]
     resources: ["workflows"]
     verbs: ["create", "get", "list", "watch"]
+  # The argo-server log endpoint reads pod logs on the caller's behalf, so the
+  # caller needs this to see workflow output. Widens exposure to anything a
+  # tenant workflow prints — which is why tenant-shared-ops never echoes secret
+  # values. Drop this rule if submitters should be write-only.
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
